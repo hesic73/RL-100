@@ -590,7 +590,7 @@ RL-100 builds on prior work in **Uni-O4**, **BPPO**, **DP3**, **Diffusion Policy
 
 ## License
 
-The release license will be added before public release.
+This project is released under the [Apache License 2.0](LICENSE).
 
 <div align="center">
 <sub>Made with care by the RL-100 team.</sub>
