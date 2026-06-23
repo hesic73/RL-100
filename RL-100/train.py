@@ -3,7 +3,7 @@ if __name__ == "__main__":
     import os
     import pathlib
 
-    ROOT_DIR = str(pathlib.Path(__file__).parent.parent.parent)
+    ROOT_DIR = str(pathlib.Path(__file__).parent.parent)  # repo root (/home/hsc/26summer/RL-100)
     sys.path.append(ROOT_DIR)
     os.chdir(ROOT_DIR)
 import argparse
@@ -452,6 +452,7 @@ class TrainDP3Workspace:
             wandb_logger.setLevel(logging.ERROR)
             # configure logging
             wandb_run = init_wandb_run(cfg, self.output_dir)
+            cprint(f"[WandB] view run: {wandb_run.url}", "cyan")
             wandb.config.update(
                 {
                     "output_dir": self.output_dir,
@@ -566,6 +567,7 @@ class TrainDP3Workspace:
                 if (self.epoch % cfg.training.rollout_every) == 0 and RUN_ROLLOUT and env_runner is not None:
                     t3 = time.time()
                     # runner_log = env_runner.run(policy, dataset=dataset)
+                    setattr(env_runner, "current_epoch", self.epoch)
                     runner_log = env_runner.run(policy)
                     t4 = time.time()
                     # print(f"rollout time: {t4-t3:.3f}")
@@ -650,6 +652,17 @@ class TrainDP3Workspace:
         
         self.offline_best_path = self.get_global_best_dir()
         self.offline_last_path = os.path.join(self.output_dir, 'last')
+        if self.cfg.only_bc:
+            cprint('only_bc=True: BC stage done, stopping before the critic/dynamics/offline-RL stages.', 'green')
+            return
+        if self.cfg.n_obs_steps > 1 and not self.cfg.chunk_as_single_action:
+            raise RuntimeError(
+                f"Offline RL stages (critic/dynamics/BPPO) are not implemented for action chunking "
+                f"(got n_obs_steps={self.cfg.n_obs_steps}, chunk_as_single_action=False). The dynamics, "
+                f"Q/value nets and N-step advantage rollout are all built for single-step features and "
+                f"will raise shape-mismatch errors downstream. Use only_bc=True to train BC only, or set "
+                f"n_obs_steps=1 for the single-step offline-RL regime."
+            )
         # =============================== stage 1-1: end diffusion training ===============================
         if self.cfg.distill_phase == 'after_dp':
             self.distill2cm(train_dataloader, val_dataloader, wandb_run, env_runner, phase=self.cfg.distill_phase)

@@ -43,16 +43,14 @@ debug.mp4
 debug.gif
 wandb/
 *wandb/
-log/
 logs/
-*.log
-*log/   
+*.log 
 dexdeform_demonstrations.zip
 personal_TASK.md
 easytrain.sh
 nohup.out
 output/
-log/
+
 train_dynamics_batch.py
 train_batch_with_d.py
 train copy.py
@@ -66,10 +64,12 @@ third_party/deart-release/assets/
 third_party/VRL3/ckpts/
 third_party/VRL3/src/vrl3data/
 third_party/DrM/exp_local/  
-CLAUDE.md
+
 tasks/
 scripts/past_bash/
 scripts/train_policy_online_cm_flip.sh
 AGENTS.md
 .claude/
 .vscode/
+
+*.so

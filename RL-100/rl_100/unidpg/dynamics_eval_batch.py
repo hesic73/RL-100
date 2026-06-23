@@ -167,7 +167,8 @@ def train_dynamics(env, normalizer, dynamics_encoder, dynamics_save_path, cfg, f
     os.makedirs(dynamics_save_path, exist_ok=True)
     log_dirs = make_log_dirs(
         cfg.task_name, cfg.name, cfg.training.seed, None,
-        record_params=None #["penalty_coef", "rollout_length"]
+        record_params=None, #["penalty_coef", "rollout_length"]
+        root_dir=os.path.join(dynamics_save_path, 'dynamics_logs'),
     )
     # key: output file name, value: output handler type
     output_config = {

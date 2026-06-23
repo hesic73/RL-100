@@ -1,0 +1,41 @@
+numpy==1.26.4             # robotics stack (mplib/toppra/legacy mujoco) needs numpy 1.x ABI
+hydra-core==1.3.2
+omegaconf==2.3.0
+zarr==2.18.2
+numcodecs
+diffusers==0.33.1
+transformers
+timm
+einops
+huggingface_hub
+wandb
+stable_baselines3
+tensorboardX
+dill
+ipdb
+tqdm
+termcolor
+colorlog
+tabulate
+scipy
+scikit-learn
+pandas
+h5py
+matplotlib
+imageio
+imageio-ffmpeg
+opencv-python==4.9.0.80   # 4.10+ needs numpy>=2
+pygame
+pymunk==6.2.1             # 7.x removed add_collision_handler
+shapely
+scikit-image
+dm_control==1.0.41
+mujoco==3.8.1             # 3.9.0 breaks dm_control 1.0.41
+dm_env
+open3d
+gym==0.26.2
+numba==0.65.1
+mani_skill==3.0.1
+fpsample==1.0.2
+mplib==0.1.1
+toppra==0.6.8
