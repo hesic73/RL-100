@@ -829,7 +829,12 @@ class IQL_Q_V_no(nn.Module):
                 next_v = self._value._net(s_p_v)
             else:
                 next_v = self._value(s_p)
-        target_q = r + not_done * (self._gamma ** self.n_action_steps) * next_v
+        # Discount must match the transition span. chunk_as_single_action treats the
+        # whole chunk as one step (reward is the discounted chunk sum, next_obs is
+        # n_action_steps ahead) -> gamma**n_action_steps. The non-chunk path uses a
+        # single-step transition (single-step reward, next_obs one step ahead) -> gamma.
+        discount_steps = self.n_action_steps if self.chunk_as_single_action else 1
+        target_q = r + not_done * (self._gamma ** discount_steps) * next_v
         action_recon_loss = None
         if self._is_double_q:
             # 对于不共享encoder的情况，直接调用内部网络

@@ -403,14 +403,37 @@ class BehaviorProximalPolicyOptimization(ProximalPolicyOptimization):
 
     @torch.no_grad()
     def NStepValueEstimation(self, nobs_features, nactions, dynamics, value, Q, iql, opt_steps):
+        # Roll the dynamics forward one action step at a time, maintaining the
+        # n_obs_steps observation window. The critic always sees the flattened
+        # window [B, n_obs_steps * feature_dim]; the dynamics gets the last-frame
+        # feature plus the full window (the 3-arg contract used by
+        # EnsembleDynamics_batch.step / multi_step_evaluation). For n_obs_steps=1
+        # this reduces to the original single-step rollout.
+        batch_size = nobs_features.shape[0]
+        n_obs_steps = self.cfg.n_obs_steps
+        feature_dim = nobs_features.shape[1] // n_obs_steps
+        policy_features = nobs_features.reshape(batch_size, n_obs_steps, feature_dim)
+        single_nob_features = policy_features[:, -1, :]
+
         advantages, rewards = [], []
-        # dp predicts n steps action, compute advantage value for each step
         for i in range(opt_steps):
-            advantage = self.advantage_computation(nobs_features, nactions[:, i], value, Q, iql)
+            state_features = policy_features.reshape(batch_size, -1)
+            advantage = self.advantage_computation(state_features, nactions[:, i], value, Q, iql)
             advantages.append(advantage)
-            next_nobs_features, reward, _, _ = dynamics.step(nobs_features, nactions[:, i])
+
+            next_obs, reward, _, _ = dynamics.step(
+                single_nob_features, nactions[:, i], policy_features)
             rewards.append(torch.from_numpy(reward).to(self._device))
-            nobs_features = torch.from_numpy(next_nobs_features).to(self._device)
+
+            if dynamics.prediction_mode == "full":
+                policy_features = torch.from_numpy(next_obs).to(
+                    device=self._device, dtype=policy_features.dtype)
+                single_nob_features = policy_features[:, -1, :]
+            else:
+                single_nob_features = torch.from_numpy(next_obs).to(
+                    device=self._device, dtype=policy_features.dtype)
+                policy_features = torch.cat(
+                    (policy_features[:, 1:, :], single_nob_features.unsqueeze(1)), dim=1)
         return torch.stack(advantages), torch.stack(rewards)
     @torch.no_grad()  
     def GAE_withQ(self, advantages, gamma, lamda, dones=None):
@@ -424,7 +447,7 @@ class BehaviorProximalPolicyOptimization(ProximalPolicyOptimization):
         return torch.stack(gae_advantages)
 
     def _get_chunk_action_bounds(self, opt_steps):
-        action_start = 0 if self.cfg.no_pre_action else self.n_obs_steps - 1
+        action_start = 0 if self.cfg.no_pre_action else self.cfg.n_obs_steps - 1
         action_end = action_start + opt_steps
         return action_start, action_end
 
@@ -826,7 +849,7 @@ class BehaviorProximalPolicyOptimization(ProximalPolicyOptimization):
                     if self.cfg.no_pre_action:
                         advantages = self._compute_advantage_actor_only(nobs_features, old_all_next_x[-1][:, 0], value, Q, iql)
                     else:
-                        advantages = self._compute_advantage_actor_only(nobs_features, old_all_next_x[-1][:, self.n_obs_steps - 1], value, Q, iql)
+                        advantages = self._compute_advantage_actor_only(nobs_features, old_all_next_x[-1][:, self.cfg.n_obs_steps - 1], value, Q, iql)
 
         for i, t in enumerate(self._old_policy.noise_scheduler.timesteps):
                 timesteps = t
@@ -848,8 +871,6 @@ class BehaviorProximalPolicyOptimization(ProximalPolicyOptimization):
                 else:   
                     eta = 1.
                     
-                if is_bc_loss:
-                    bc_loss = self.bc_loss(model_output, old_all_x[0], 1.0)
                 new_log_prob = self._step_forward_logprob_with_optional_debug(
                     model_output=model_output,
                     timesteps=timesteps,
@@ -901,7 +922,7 @@ class BehaviorProximalPolicyOptimization(ProximalPolicyOptimization):
                         if self.cfg.no_pre_action:
                             advantages = self._compute_advantage_actor_only(nobs_features, old_all_next_x[i][:, 0], value, Q, iql)
                         else:
-                            advantages = self._compute_advantage_actor_only(nobs_features, old_all_next_x[i][:, self.n_obs_steps - 1], value, Q, iql)
+                            advantages = self._compute_advantage_actor_only(nobs_features, old_all_next_x[i][:, self.cfg.n_obs_steps - 1], value, Q, iql)
             
                 if is_clip_decay:
                     if is_linear_decay:
@@ -968,7 +989,7 @@ class BehaviorProximalPolicyOptimization(ProximalPolicyOptimization):
                 elif opt_steps > 1:
                     # Per-step joint action ratio.  The scheduler returns
                     # per-event log-probs, so sum event dims before exp().
-                    action_start = 0 if self.cfg.no_pre_action else self.n_obs_steps - 1
+                    action_start = 0 if self.cfg.no_pre_action else self.cfg.n_obs_steps - 1
                     action_end = action_start + opt_steps
                     old_step_logprob = self._sum_step_logprob_event_dims(
                         old_all_logprob[i][:, action_start:action_end]
@@ -1003,7 +1024,7 @@ class BehaviorProximalPolicyOptimization(ProximalPolicyOptimization):
                     if self.cfg.no_pre_action:
                         action_idx = 0
                     else:
-                        action_idx = self.n_obs_steps - 1
+                        action_idx = self.cfg.n_obs_steps - 1
                     old_action_logprob = self._sum_logprob_event_dims(old_all_logprob[i][:, action_idx])
                     new_action_logprob = self._sum_logprob_event_dims(new_log_prob[:, action_idx])
                     action_ratio = (new_action_logprob - old_action_logprob).exp()
@@ -1021,15 +1042,23 @@ class BehaviorProximalPolicyOptimization(ProximalPolicyOptimization):
                     loss1 = action_ratio * adv
                     loss2 = torch.clamp(action_ratio, 1 - self._clip_ratio, 1 + self._clip_ratio) * adv
                     loss = -(torch.min(loss1, loss2)).mean()
-                if is_bc_loss:
-                    loss = bc_loss + loss
-                # pdb.set_trace()
-                # torch.autograd.set_detect_anomaly(True)
                 self._optimizer.zero_grad()
                 loss.backward(retain_graph=True)
                 torch.nn.utils.clip_grad_norm_(self._policy.model.parameters(), 0.5)
                 self._optimizer.step()
                 losses.append(loss.item())
+        # Behavior-clone anchor: keep the policy near the data distribution where
+        # the critic Q is reliable (offline OOD-extrapolation guard). Run once per
+        # update as a separate diffusion BC step on the dataset actions.
+        if is_bc_loss:
+            bc_weight = float(getattr(self.cfg.unio4, 'bc_weight', 1.0))
+            bc_raw, _ = self._policy.compute_loss(batch)
+            bc_term = bc_weight * bc_raw
+            self._optimizer.zero_grad()
+            bc_term.backward()
+            torch.nn.utils.clip_grad_norm_(self._policy.model.parameters(), 0.5)
+            self._optimizer.step()
+            losses.append(bc_term.item())
         loss = sum(losses) / len(losses)
 
         if is_lr_decay:
@@ -1171,7 +1200,7 @@ class BehaviorProximalPolicyOptimization(ProximalPolicyOptimization):
                                                         next_sample=actions[i+1], eta=eta)
                                                         
 
-                    action_start = 0 if self.cfg.no_pre_action else self.n_obs_steps - 1
+                    action_start = 0 if self.cfg.no_pre_action else self.cfg.n_obs_steps - 1
                     action_end = action_start + self.cfg.n_action_steps
 
                     if self.cfg.chunk_as_single_action:
@@ -1196,22 +1225,27 @@ class BehaviorProximalPolicyOptimization(ProximalPolicyOptimization):
                         surr1 = ratios * adv_chunk
                         surr2 = torch.clamp(ratios, 1 - self.args.epsilon, 1 + self.args.epsilon) * adv_chunk
                     else:
-                        # keep original non-chunk behavior unchanged
-                        ratios = torch.exp(
-                            a_logprob_now[:, action_start:action_end].sum(-1, keepdim=True)
-                            - a_logprob_old[i][:, action_start:action_end].sum(-1, keepdim=True)
-                        ).squeeze(1)
+                        # Non-chunk multi-step: the advantage is a single chunk-level
+                        # scalar per transition (GAE with gamma**n_action_steps), so the
+                        # ratio is the joint log-prob over the whole action chunk. Summing
+                        # the action-step and event dims reduces to [B]. For n_action_steps=1
+                        # this matches the original single-step ratio.
+                        bsz = a_logprob_now.shape[0]
+                        logprob_now_scalar = a_logprob_now[:, action_start:action_end].reshape(bsz, -1).sum(dim=1)
+                        logprob_old_scalar = a_logprob_old[i][:, action_start:action_end].reshape(bsz, -1).sum(dim=1)
+                        ratios = torch.exp(logprob_now_scalar - logprob_old_scalar)  # [B]
 
                         self._record_ratio_stats(
                             "online",
                             i,
                             ratios,
-                            a_logprob_old[i][:, action_start:action_end].sum(-1),
-                            a_logprob_now[:, action_start:action_end].sum(-1),
+                            logprob_old_scalar,
+                            logprob_now_scalar,
                         )
 
-                        surr1 = ratios * adv[index]
-                        surr2 = torch.clamp(ratios, 1 - self.args.epsilon, 1 + self.args.epsilon) * adv[index]
+                        adv_b = adv[index].reshape(-1)
+                        surr1 = ratios * adv_b
+                        surr2 = torch.clamp(ratios, 1 - self.args.epsilon, 1 + self.args.epsilon) * adv_b
 
                     actor_loss = -torch.min(surr1, surr2) #- self.entropy_coef * dist_entropy  
                     if not self.args.fix_encoder and self.args.recon and (self.args.per_step_recon or i == 0):
@@ -1220,10 +1254,11 @@ class BehaviorProximalPolicyOptimization(ProximalPolicyOptimization):
                     # kl lr scheduler
                     if not self.args.use_lr_decay:
                         with torch.no_grad():
+                            bsz = a_logprob_now.shape[0]
                             log_ratio = (
-                                a_logprob_now[:, action_start:action_end].sum(-1, keepdim=True)
-                                - a_logprob_old[i][:, action_start:action_end].sum(-1, keepdim=True)
-                            ).squeeze(1)
+                                a_logprob_now[:, action_start:action_end].reshape(bsz, -1).sum(dim=1)
+                                - a_logprob_old[i][:, action_start:action_end].reshape(bsz, -1).sum(dim=1)
+                            )
                             approx_kl_div = torch.mean((torch.exp(log_ratio) - 1) - log_ratio).cpu().numpy()
                             approx_kl_divs.append(approx_kl_div)
                         lr_actor = self.kl_scheduler_actor.update(approx_kl_div)

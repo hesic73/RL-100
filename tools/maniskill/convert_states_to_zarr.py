@@ -42,6 +42,9 @@ def main():
     p.add_argument("--out", required=True)
     p.add_argument("--num-points", type=int, default=512)
     p.add_argument("--max-episodes", type=int, default=None, help="default: all demos in the h5")
+    p.add_argument("--env-kwargs", default="{}",
+                   help="JSON of task-difficulty kwargs; MUST match generate_demos.py and "
+                        "the eval/training env_runner.env_kwargs.")
     args = p.parse_args()
 
     f = h5py.File(args.demo_h5, "r")
@@ -51,7 +54,7 @@ def main():
         episodes = episodes[:args.max_episodes]
 
     env = gym.make(args.env_id, obs_mode="pointcloud", control_mode=args.control_mode,
-                   num_envs=1, sim_backend="physx_cpu")
+                   num_envs=1, sim_backend="physx_cpu", **json.loads(args.env_kwargs))
 
     buf = {k: [] for k in ["state", "action", "point_cloud", "next_state",
                            "next_action", "next_point_cloud", "reward",

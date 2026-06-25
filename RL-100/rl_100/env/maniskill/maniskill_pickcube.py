@@ -153,11 +153,15 @@ def build_agent_pos(qpos, tcp_pose, goal_pos):
 # obs_dict interface that RL-100's runner/policy expect.
 class ManiSkillPointcloudEnv(gym.Env):
     def __init__(self, task_name="PickCubeRL100-v1", control_mode="pd_joint_pos",
-                 num_points=512, max_episode_steps=100, seed=0, render_mode="rgb_array"):
+                 num_points=512, max_episode_steps=100, seed=0, render_mode="rgb_array",
+                 env_kwargs=None):
+        # env_kwargs forwards task difficulty (cube_spawn_half_size, goal_z_min/max,
+        # goal_xy_half_size, goal_thresh, ...) to the registered env, so difficulty
+        # lives in config, not hardcoded in the env source.
         self._env = gymnasium.make(
             task_name, obs_mode="pointcloud", control_mode=control_mode,
             num_envs=1, max_episode_steps=max_episode_steps, sim_backend="physx_cpu",
-            render_mode=render_mode)
+            render_mode=render_mode, **(env_kwargs or {}))
         self.num_points = num_points
         self._seed = seed
         self._episode = 0

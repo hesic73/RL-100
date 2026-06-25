@@ -26,9 +26,13 @@ env_runner:
   env_num: 1
   seed: 42
   gamma: ${gamma}
+  # Task difficulty, forwarded to the registered env (empty = original defaults).
+  # Override e.g. task.env_runner.env_kwargs='{cube_spawn_half_size:0.10,goal_z_min:0.10,goal_z_max:0.25}'.
+  # NOTE: demo generation + zarr conversion must use the SAME difficulty (see their --env-kwargs).
+  env_kwargs: {}
 
 norm_dataset:
-  _target_: rl_100.dataset.pusht_dataset.PushTDataset
+  _target_: rl_100.dataset.maniskill_dataset.ManiSkillDataset
   zarr_path: data/maniskill_pickcube.zarr
   horizon: ${horizon}
   pad_before: ${eval:'${n_obs_steps}-1'}
@@ -38,7 +42,7 @@ norm_dataset:
   max_train_episodes: 9000000
   pre_image_norm: False
 dataset:
-  _target_: rl_100.dataset.pusht_dataset.PushTDataset
+  _target_: rl_100.dataset.maniskill_dataset.ManiSkillDataset
   zarr_path: data/maniskill_pickcube.zarr
   horizon: ${horizon}
   pad_before: ${eval:'${n_obs_steps}-1'}
@@ -48,7 +52,7 @@ dataset:
   max_train_episodes: 9000000
   pre_image_norm: False
 critic_dataset:
-  _target_: rl_100.dataset.pusht_dataset.PushTDataset
+  _target_: rl_100.dataset.maniskill_dataset.ManiSkillDataset
   zarr_path: data/maniskill_pickcube.zarr
   horizon: ${horizon}
   pad_before: ${eval:'${n_obs_steps}-1'}
@@ -57,8 +61,20 @@ critic_dataset:
   val_ratio: 0.00
   max_train_episodes: 9000000
   pre_image_norm: False
+  sequence_stride: 1
+finetune_dataset:
+  _target_: rl_100.dataset.maniskill_dataset.ManiSkillDataset
+  zarr_path: data/maniskill_pickcube.zarr
+  horizon: ${horizon}
+  pad_before: ${eval:'${n_obs_steps}-1'}
+  pad_after: ${eval:'${n_action_steps}-1'}
+  seed: 42
+  val_ratio: 0.00
+  max_train_episodes: 9000000
+  pre_image_norm: False
+  sequence_stride: 1
 scale_dataset:
-  _target_: rl_100.dataset.pusht_dataset.PushTDataset
+  _target_: rl_100.dataset.maniskill_dataset.ManiSkillDataset
   zarr_path: data/maniskill_pickcube.zarr
   horizon: ${horizon}
   pad_before: ${eval:'${n_obs_steps}-1'}

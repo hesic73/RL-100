@@ -354,6 +354,8 @@ unio4:
   eval_times: 1
   finetune_batch_size: 512
   final_reward: True
+  is_bc_loss: False
+  bc_weight: 1.0
 
 dynamics:
   gamma: ${gamma}
