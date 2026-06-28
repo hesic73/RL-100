@@ -104,7 +104,18 @@ def offline_finetune(workspace, dynamics, Q, value, iql):
         first_action=cfg.dynamics.first_action,
     )
     print('rollout trajectory q mean:{}'.format(best_mean_qs))
-    
+
+    # AM-Q OPE gate (paper Eq.9): keep the policy OPE-monotonic by snapshotting the
+    # best-OPE policy and reverting to it when a candidate fails to improve AM-Q by
+    # delta. The released codebase only advanced the *reference* policy on rollout-Q
+    # improvement and never reverted the actual policy (so it could drift off the
+    # data manifold). Enabled by unio4.ope_gate.
+    from rl_100.training.workspace import _copy_to_cpu
+    ope_gate = bool(cfg.unio4.ope_gate)
+    ope_gate_delta = float(cfg.unio4.ope_gate_delta)
+    best_ope = float(best_mean_qs[0])
+    best_policy_state = _copy_to_cpu(workspace.unio4._policy.state_dict()) if ope_gate else None
+
     update_num = 0
     scores, opes = [], []
     idql_scores, ema_scores, normal_scores = [], [], []
@@ -244,7 +255,19 @@ def offline_finetune(workspace, dynamics, Q, value, iql):
             wandb.log({'current_mean_qs': current_mean_qs})
             print('rollout trajectory q mean:{}'.format(current_mean_qs))
             print(f"Step: {step}, Loss: ", losses)
-            if cfg.unio4.is_update_old_policy:
+            if ope_gate:
+                cur_ope = float(current_mean_qs[0])
+                delta = ope_gate_delta * abs(best_ope)
+                if cur_ope >= best_ope + delta:
+                    best_ope = cur_ope
+                    best_policy_state = _copy_to_cpu(workspace.unio4._policy.state_dict())
+                    workspace.unio4.set_old_policy()
+                    print(f'[OPE-gate] ACCEPT AM-Q={cur_ope:.4f} (>= best+{delta:.4f}) -> advance behavior')
+                else:
+                    workspace.unio4._policy.load_state_dict(
+                        {k: v.to(workspace.device) for k, v in best_policy_state.items()})
+                    print(f'[OPE-gate] REJECT AM-Q={cur_ope:.4f} (< best {best_ope:.4f}+{delta:.4f}) -> revert policy')
+            elif cfg.unio4.is_update_old_policy:
                 if current_mean_qs > best_mean_qs:
                     best_mean_qs = current_mean_qs
                     workspace.unio4.set_old_policy()

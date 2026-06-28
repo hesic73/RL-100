@@ -5,9 +5,9 @@ import gymnasium as gym
 import mani_skill.envs  # noqa: F401
 import rl_100.env.maniskill  # noqa: F401  registers PickCubeRL100-v1
 from mani_skill.utils.wrappers.record import RecordEpisode
-from mani_skill.examples.motionplanning.panda.solutions import solvePickCube
+from mani_skill.examples.motionplanning.panda.solutions import solvePickCube, solveStackCube
 
-SOLVERS = {"PickCubeRL100-v1": solvePickCube}
+SOLVERS = {"PickCubeRL100-v1": solvePickCube, "StackCubeRL100-v1": solveStackCube}
 
 
 def main():

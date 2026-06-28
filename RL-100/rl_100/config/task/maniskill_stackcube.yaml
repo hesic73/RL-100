@@ -1,0 +1,86 @@
+name: maniskill_stackcube
+
+task_name: StackCubeRL100-v1
+
+shape_meta: &shape_meta
+  obs:
+    point_cloud:
+      shape: [512, 3]
+      type: point_cloud
+    agent_pos:
+      shape: [19]
+      type: low_dim
+  action:
+    shape: [8]
+
+env_runner:
+  _target_: rl_100.env_runner.maniskill_runner.ManiSkillRunner
+  eval_episodes: 16
+  max_steps: 100
+  n_obs_steps: ${n_obs_steps}
+  n_action_steps: ${n_action_steps}
+  fps: 10
+  task_name: StackCubeRL100-v1
+  control_mode: pd_joint_pos
+  num_points: 512
+  env_num: 1
+  seed: 42
+  gamma: ${gamma}
+  # Task difficulty, forwarded to the registered env (empty = original defaults).
+  # Override e.g. task.env_runner.env_kwargs='{cube_spawn_half_size:0.10}' to widen cube spawn.
+  # NOTE: demo generation + zarr conversion must use the SAME difficulty (see their --env-kwargs).
+  env_kwargs: {}
+
+norm_dataset:
+  _target_: rl_100.dataset.maniskill_dataset.ManiSkillDataset
+  zarr_path: data/maniskill_stackcube.zarr
+  horizon: ${horizon}
+  pad_before: ${eval:'${n_obs_steps}-1'}
+  pad_after: ${eval:'${n_action_steps}-1'}
+  seed: 42
+  val_ratio: 0.02
+  max_train_episodes: 9000000
+  pre_image_norm: False
+dataset:
+  _target_: rl_100.dataset.maniskill_dataset.ManiSkillDataset
+  zarr_path: data/maniskill_stackcube.zarr
+  horizon: ${horizon}
+  pad_before: ${eval:'${n_obs_steps}-1'}
+  pad_after: ${eval:'${n_action_steps}-1'}
+  seed: 42
+  val_ratio: 0.02
+  max_train_episodes: 9000000
+  pre_image_norm: False
+critic_dataset:
+  _target_: rl_100.dataset.maniskill_dataset.ManiSkillDataset
+  zarr_path: data/maniskill_stackcube.zarr
+  horizon: ${horizon}
+  pad_before: ${eval:'${n_obs_steps}-1'}
+  pad_after: ${eval:'${n_action_steps}-1'}
+  seed: 42
+  val_ratio: 0.00
+  max_train_episodes: 9000000
+  pre_image_norm: False
+  sequence_stride: 1
+finetune_dataset:
+  _target_: rl_100.dataset.maniskill_dataset.ManiSkillDataset
+  zarr_path: data/maniskill_stackcube.zarr
+  horizon: ${horizon}
+  pad_before: ${eval:'${n_obs_steps}-1'}
+  pad_after: ${eval:'${n_action_steps}-1'}
+  seed: 42
+  val_ratio: 0.00
+  max_train_episodes: 9000000
+  pre_image_norm: False
+  sequence_stride: 1
+scale_dataset:
+  _target_: rl_100.dataset.maniskill_dataset.ManiSkillDataset
+  zarr_path: data/maniskill_stackcube.zarr
+  horizon: ${horizon}
+  pad_before: ${eval:'${n_obs_steps}-1'}
+  pad_after: ${eval:'${n_action_steps}-1'}
+  seed: 42
+  val_ratio: 0.00
+  max_train_episodes: 9000000
+  scale_strategy: 'dynamic'
+  pre_image_norm: False

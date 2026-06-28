@@ -338,6 +338,8 @@ unio4:
   is_clip_decay: true
   is_bppo_lr_decay: False
   is_update_old_policy: True
+  ope_gate: False          # paper Eq.9 AM-Q gate: revert policy if OPE doesn't improve by delta
+  ope_gate_delta: 0.05
   is_linear_decay: True
   bppo_batch_size: 512
   temperature: null

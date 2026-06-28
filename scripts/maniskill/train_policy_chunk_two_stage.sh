@@ -22,7 +22,7 @@ set -euo pipefail
 # Usage: bash scripts/maniskill/train_policy_chunk_two_stage.sh [seed]
 
 seed=${1:-42}
-task_name=maniskill_pickcube
+task_name=${TASK:-maniskill_pickcube}
 config_name='rl100_3d_epsilon'
 exp_name=${task_name}-rl100-chunk
 
